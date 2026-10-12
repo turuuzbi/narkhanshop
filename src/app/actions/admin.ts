@@ -1,6 +1,7 @@
 "use server";
 
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -68,10 +69,24 @@ const productSchema = z
   })
   .refine((d) => d.salePrice == null || d.salePrice < d.price, { path: ["salePrice"], error: "Хямдралтай үнэ үндсэн үнээс бага байх ёстой" });
 
+/** public/uploads locally; /tmp on read-only hosts like Vercel (ephemeral — use Vercel Blob for real use). */
+async function uploadDir() {
+  for (const dir of [path.join(process.cwd(), "public", "uploads"), path.join(os.tmpdir(), "narkhan-uploads")]) {
+    try {
+      await fs.mkdir(dir, { recursive: true });
+      await fs.access(dir, fs.constants.W_OK);
+      return dir;
+    } catch {
+      /* try the next location */
+    }
+  }
+  throw new Error("Зураг хадгалах боломжгүй байна");
+}
+
 async function saveUploads(files: File[]) {
   const urls: string[] = [];
-  const dir = path.join(process.cwd(), "public", "uploads");
-  await fs.mkdir(dir, { recursive: true });
+  if (!files.some((f) => f.size)) return urls;
+  const dir = await uploadDir();
   for (const f of files) {
     if (!f.size) continue;
     if (!/^image\/(jpeg|png|webp|avif)$/.test(f.type)) throw new Error("Зөвхөн JPG, PNG, WEBP зураг оруулна уу");

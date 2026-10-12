@@ -131,14 +131,25 @@ const ORDERS: OrderRow[] = [
   ["П. Гэрэлмаа", "99001313", "Налайх", "2", "2-р хороо, 14-р байр, 6 тоот", "cancelled", 150, "standard", "storepay", "facebook", ["pj-black-polka-satin:L:1"], "Хэмжээ солих хүсэлтээр цуцлав"],
 ];
 
+/** Photos shipped in public/products (cropped from the shop's Instagram). */
+const BUNDLED_PHOTOS = new Set(
+  PRODUCTS.map(([slug]) => slug).filter((slug) => !slug.startsWith("bra-")),
+);
+
 function productImages(slug: string, category: string, hex: string): string[] {
-  const root = process.cwd();
-  for (const ext of ["jpg", "jpeg", "png", "webp"]) {
-    if (fs.existsSync(path.join(root, "public", "products", `${slug}.${ext}`))) return [`/products/${slug}.${ext}`];
+  const productsDir = path.join(process.cwd(), "public", "products");
+  if (fs.existsSync(productsDir)) {
+    // Local: any <slug>.jpg|png|webp dropped into public/products is picked up.
+    for (const ext of ["jpg", "jpeg", "png", "webp"]) {
+      if (fs.existsSync(path.join(productsDir, `${slug}.${ext}`))) return [`/products/${slug}.${ext}`];
+    }
+  } else if (BUNDLED_PHOTOS.has(slug)) {
+    // Serverless (Vercel): public/ is served from the CDN and isn't on the function's disk.
+    return [`/products/${slug}.jpg`];
   }
   const files = [`${slug}.svg`, `${slug}-2.svg`];
   try {
-    const dir = path.join(root, "public", "placeholders");
+    const dir = path.join(process.cwd(), "public", "placeholders");
     fs.mkdirSync(dir, { recursive: true });
     files.forEach((f, i) => {
       const fp = path.join(dir, f);

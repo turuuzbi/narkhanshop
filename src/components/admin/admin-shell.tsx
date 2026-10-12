@@ -36,7 +36,7 @@ function isActive(pathname: string, href: string) {
   return href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 }
 
-export function AdminShell({ children, newOrders }: { children: React.ReactNode; newOrders: number }) {
+export function AdminShell({ children, newOrders, demoMode }: { children: React.ReactNode; newOrders: number; demoMode: boolean }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -59,6 +59,7 @@ export function AdminShell({ children, newOrders }: { children: React.ReactNode;
     <div className="min-h-dvh bg-[#F7F1EC]">
       <div className="bg-ink px-4 py-1.5 text-center text-[11px] font-medium text-white/90">
         Демо горим: admin хэсэг бүх хүнд нээлттэй.
+        {demoMode && " Өгөгдөл түр хадгалагдана — сервер дахин асахад анхны байдалдаа орно."}
       </div>
       <div className="flex">
         {/* Desktop sidebar */}

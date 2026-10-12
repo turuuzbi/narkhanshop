@@ -84,7 +84,9 @@ npm install && npx prisma migrate dev && npm run seed && npm run dev
 prisma/
   schema.prisma          Өгөгдлийн загвар (SQLite; Postgres-т шууд нийцнэ)
   migrations/            SQLite migration
-  seed.ts                `npm run seed` → src/lib/seed.ts
+  seed.ts                `npm run seed` → src/lib/seed.ts (`--if-empty`: хоосон үед л)
+scripts/
+  prisma-build.mjs       Build-ийн өмнө: SQLite эсвэл Postgres (Neon) сонгоно
 public/
   products/              Барааны зураг: <slug>.jpg (seed автоматаар холбоно)
   placeholders/          Зураггүй бараанд зориулсан SVG (seed үүсгэнэ)
@@ -98,12 +100,15 @@ src/
                          promotions, settings
     actions/             Server Actions (shop.ts — захиалга, admin.ts — админ)
     api/uploads/[file]/  Оруулсан зургийг уншуулах
+  instrumentation.ts     Сервер асахад демо өгөгдлийн санг бэлдэнэ (Vercel демо горим)
   components/
     shop/                Header, сагс, барааны карт, хэмжээ олох, checkout…
     admin/               Админ shell, DM захиалга, барааны форм, үлдэгдэл…
     ui.tsx, logo.tsx, product-image.tsx
   lib/
     orders.ts            Захиалга үүсгэх/төлөв солих (үлдэгдлийн транзакц)
+    db-config.ts         Өгөгдлийн сан сонгох: Postgres / Vercel демо горим / локал SQLite
+    demo-db.ts           Демо горимд /tmp дотор SQLite үүсгэж seed хийнэ
     promotions.ts        Үнэ, урамшуулал, хүргэлтийн тооцоо (client + server)
     promotion-schema.ts  Урамшууллын Zod схем (зөвхөн server)
     seed.ts              Демо өгөгдөл (бараа, захиалга, урамшуулал, тохиргоо)
@@ -115,41 +120,32 @@ src/
 
 ---
 
-## Neon Postgres + Vercel рүү шилжүүлэх
+## Vercel дээр байршуулах
 
-> **Анхаар:** Vercel дээр файлын систем түр зуурынх / зөвхөн уншигдах тул **SQLite файл болон `public/uploads` дотор хадгалсан зураг хадгалагдахгүй.** Өгөгдөлд **Neon Postgres**, зурагт **Vercel Blob** ашиглана.
+### 1. Шууд ажиллана — демо горим
+Репог Vercel-д холбоход нэмэлт тохиргоогүйгээр ажиллана. Vercel-ийн файлын систем зөвхөн уншигддаг тул өгөгдлийн сан тохируулаагүй үед апп **демо горимд** ажиллана: сервер асах бүрт `/tmp` дотор шинэ SQLite өгөгдлийн сан үүсгэж, демо өгөгдлөөр дүүргэнэ (`src/instrumentation.ts` → `src/lib/demo-db.ts`, ~0.2 сек).
 
-1. **Neon** (https://neon.tech) дээр project үүсгээд 2 connection string авна:
-   - Pooled (`...-pooler...`) → `DATABASE_URL`
-   - Direct → `DIRECT_URL`
-2. `prisma/schema.prisma` дахь datasource-ийг солино:
-   ```prisma
-   datasource db {
-     provider  = "postgresql"
-     url       = env("DATABASE_URL")
-     directUrl = env("DIRECT_URL")
-   }
-   ```
-3. `.env` дахь SQLite мөрийг Neon-ий 2 URL-аар солино (Prisma CLI зөвхөн `.env`-ийг уншдаг). Нууц мэдээлэл commit хийгдэхгүйн тулд `.env`-ийг `.gitignore`-д нэмнэ. Дараа нь хуучин SQLite migration-ыг устгаад Postgres-т шинээр үүсгэнэ:
-   ```bash
-   rm -rf prisma/migrations
-   npx prisma migrate dev --name init
-   npm run seed
-   ```
-4. `package.json`-ийн build-д migration нэмнэ:
-   ```json
-   "build": "prisma generate && prisma migrate deploy && next build"
-   ```
-5. Кодоо GitHub руу push хийгээд **Vercel → Add New Project → энэ репо**. Environment Variables хэсэгт `DATABASE_URL`, `DIRECT_URL`-ыг нэмээд Deploy.
-6. **Зураг (Vercel Blob):** Vercel → Storage → Blob store үүсгэж project-доо холбоно (`BLOB_READ_WRITE_TOKEN` автоматаар нэмэгдэнэ). `npm i @vercel/blob` хийгээд `src/app/actions/admin.ts` доторх `saveUploads()`-ийн `fs.writeFile`-ийг дараахаар солино:
-   ```ts
-   import { put } from "@vercel/blob";
-   const blob = await put(`products/${name}`, f, { access: "public" });
-   urls.push(blob.url);
-   ```
-   `next.config.ts`-д `images.remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com" }]` нэмнэ.
-7. «Демо өгөгдлийг сэргээх» Vercel дээр ч ажиллана (Neon руу seed бичнэ; placeholder зураг репод байгаа).
-8. **Жинхэнэ ашиглалтаас өмнө** `/admin`-д нэвтрэх эрх (ж: Auth.js эсвэл `proxy.ts`-д нууц үгийн шалгалт) заавал нэмнэ.
+- Захиалга, засвар ажиллана, гэхдээ **түр хадгалагдана**: Vercel серверийг унтраагаад дахин асаахад (хэсэг хугацаанд хэн ч ороогүй үед) анхны демо өгөгдөл рүү буцна.
+- Админы дээд мөрөнд «Өгөгдөл түр хадгалагдана…» гэж харагдана.
+
+### 2. Өгөгдлийг байнга хадгалах — Neon Postgres (2 минут)
+1. Vercel → **narkhanshop** project → **Storage** → **Create Database** → **Neon** (Serverless Postgres, үнэгүй) → бүс сонгоод (ж: Singapore) үүсгэнэ.
+2. **Connect Project** → narkhanshop, бүх орчин (Production, Preview, Development) → Connect. `DATABASE_URL`, `DATABASE_URL_UNPOOLED` зэрэг хувьсагч автоматаар нэмэгдэнэ.
+3. **Deployments → хамгийн сүүлийнх → Redeploy.**
+
+Build үед `scripts/prisma-build.mjs` Postgres-ийн URL-ыг илрүүлээд: `prisma/schema.prisma`-ийн Postgres хувилбарыг үүсгэж, хүснэгтүүдийг үүсгэнэ (`prisma db push`), өгөгдлийн сан хоосон бол **нэг удаа** демо өгөгдлөөр дүүргэнэ. Дараагийн deploy-ууд өгөгдлийг устгахгүй. Кодонд өөрчлөлт хийх шаардлагагүй, локал хөгжүүлэлт SQLite-аараа үлдэнэ.
+
+### 3. Зураг оруулах (Vercel Blob)
+Админаас оруулсан зураг Vercel дээр `/tmp`-д түр хадгалагдана. Байнга хадгалахын тулд Vercel → Storage → **Blob** үүсгэж project-доо холбоно (`BLOB_READ_WRITE_TOKEN` нэмэгдэнэ), `npm i @vercel/blob` хийгээд `src/app/actions/admin.ts` доторх `saveUploads()`-д `fs.writeFile`-ийн оронд:
+```ts
+import { put } from "@vercel/blob";
+const blob = await put(`products/${name}`, f, { access: "public" });
+urls.push(blob.url);
+```
+`next.config.ts`-д `images.remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com" }]` нэмнэ.
+
+### 4. Жинхэнэ ашиглалтаас өмнө
+`/admin`-д нэвтрэх эрх (ж: Auth.js эсвэл `src/proxy.ts`-д нууц үгийн шалгалт) заавал нэмнэ.
 
 ---
 
@@ -159,7 +155,7 @@ Next.js 16 (App Router, Turbopack) · TypeScript (strict) · Tailwind CSS 4 · P
 
 - Үнэ, урамшуулал, хүргэлтийн төлбөрийг захиалах үед **сервер дээр дахин тооцоолно** (client-ийн үнэд итгэхгүй).
 - Үлдэгдэл хасахдаа нөхцөлтэй update (`stock >= qty`) ашигладаг тул сүүлийн ширхэгийг 2 хүн зэрэг авч чадахгүй; аль нэг мөр амжилтгүй бол бүх захиалга буцна. Цуцлахад үлдэгдэл буцаж нэмэгдэнэ.
-- Шалгасан: `npm run build` алдаагүй, TypeScript алдаагүй, демо сценари (А–Г) 390px дээр консолын алдаагүй, Lighthouse mobile — нүүр: Performance 90–96 / Accessibility 100, барааны хуудас: 93 / 100.
+- Шалгасан: `npm run build` алдаагүй, TypeScript алдаагүй, демо сценари (А–Г) 390px дээр консолын алдаагүй — локал SQLite, Vercel-ийн демо горим, PostgreSQL 16 гурван горимд. Lighthouse mobile — нүүр: Performance 90–96 / Accessibility 100, барааны хуудас: 93 / 100.
 
 ## Товчилсон зүйлс (демо учраас)
 
