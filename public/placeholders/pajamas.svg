@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#FBF6F1"/><stop offset="1" stop-color="#F6E3D3"/></linearGradient></defs>
+  <rect width="600" height="800" fill="url(#g)"/>
+  <circle cx="470" cy="150" r="170" fill="#F4C7CF" opacity="0.28"/>
+  <circle cx="120" cy="690" r="130" fill="#FFFFFF" opacity="0.45"/>
+  <g>
+    <path d="M222 470 L378 470 L400 700 L318 700 L300 548 L282 700 L200 700 Z" fill="#F4C7CF" stroke="#856b71" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M206 236 L254 214 L300 252 L346 214 L394 236 L456 384 L414 400 L386 330 L386 482 L214 482 L214 330 L186 400 L144 384 Z" fill="#F4C7CF" stroke="#856b71" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M254 214 L300 300 L346 214" fill="none" stroke="#856b71" stroke-width="3"/>
+    <g fill="#856b71"><circle cx="300" cy="336" r="4"/><circle cx="300" cy="382" r="4"/><circle cx="300" cy="428" r="4"/></g></g>
+  <g fill="#6B1E3A" opacity="0.55"><path d="M96 118 l5 13 13 5 -13 5 -5 13 -5 -13 -13 -5 13 -5 z"/><path d="M512 642 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z"/></g>
+</svg>

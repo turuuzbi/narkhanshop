@@ -1,0 +1,116 @@
+// Narkhan Shop demo schema.
+// SQLite for the demo; every type here is also valid on PostgreSQL (Neon).
+// JSON-ish fields are stored as String so the schema works on both providers.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  /// JSON array of style names, e.g. ["Thong","Brazilian"]
+  styles    String    @default("[]")
+  sortOrder Int       @default(0)
+  products  Product[]
+}
+
+model Product {
+  id          String           @id @default(cuid())
+  name        String
+  slug        String           @unique
+  description String
+  categoryId  String
+  category    Category         @relation(fields: [categoryId], references: [id])
+  style       String
+  price       Int
+  salePrice   Int?
+  /// Pieces per pack (3 for a 3-pack); used by the XL gift promotion
+  packSize    Int              @default(1)
+  /// JSON array: [{ "name": "Хар", "hex": "#111111" }]
+  colors      String           @default("[]")
+  /// JSON array of image URLs
+  images      String           @default("[]")
+  isNew       Boolean          @default(false)
+  isFeatured  Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  variants    ProductVariant[]
+  orderItems  OrderItem[]
+
+  @@index([categoryId])
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size      String
+  stock     Int     @default(0)
+
+  @@unique([productId, size])
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  seq           Int         @unique
+  number        String      @unique
+  customerName  String
+  phone         String
+  district      String
+  khoroo        String
+  address       String
+  note          String?
+  deliveryType  String // standard | express
+  deliveryFee   Int
+  paymentMethod String // storepay | pocketzero | bank
+  status        String      @default("new") // new | confirmed | shipping | delivered | cancelled
+  source        String      @default("web") // web | instagram | facebook | phone
+  subtotal      Int
+  discount      Int         @default(0)
+  total         Int
+  giftNote      String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  items         OrderItem[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  name      String
+  image     String?
+  size      String
+  color     String?
+  unitPrice Int
+  quantity  Int
+}
+
+model Promotion {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  type        String // size_discount | size_gift
+  /// JSON rule, see src/lib/promotions.ts
+  rule        String   @default("{}")
+  active      Boolean  @default(true)
+  bannerColor String   @default("#F4C7CF")
+  createdAt   DateTime @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String
+}
